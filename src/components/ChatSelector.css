@@ -265,3 +265,135 @@
     justify-content: center;
   }
 }
+
+/* Add to ChatSelector.css - Search functionality */
+
+.search-container {
+  margin: 15px 0;
+  width: 100%;
+  max-width: 400px;
+  margin-left: auto;
+  margin-right: auto;
+}
+
+.search-input-wrapper {
+  position: relative;
+  display: flex;
+  align-items: center;
+}
+
+.search-input {
+  width: 100%;
+  padding: 12px 40px 12px 40px;
+  border: 2px solid rgba(255, 255, 255, 0.3);
+  border-radius: 25px;
+  background: rgba(255, 255, 255, 0.1);
+  color: white;
+  font-size: 0.95rem;
+  outline: none;
+  transition: all 0.3s ease;
+}
+
+.search-input::placeholder {
+  color: rgba(255, 255, 255, 0.7);
+}
+
+.search-input:focus {
+  border-color: rgba(255, 255, 255, 0.6);
+  background: rgba(255, 255, 255, 0.15);
+  box-shadow: 0 0 0 3px rgba(255, 255, 255, 0.1);
+}
+
+.search-icon {
+  position: absolute;
+  left: 12px;
+  color: rgba(255, 255, 255, 0.7);
+  font-size: 1rem;
+  pointer-events: none;
+}
+
+.clear-search {
+  position: absolute;
+  right: 12px;
+  background: rgba(255, 255, 255, 0.2);
+  border: none;
+  color: white;
+  width: 24px;
+  height: 24px;
+  border-radius: 50%;
+  cursor: pointer;
+  font-size: 0.8rem;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: all 0.2s ease;
+}
+
+.clear-search:hover {
+  background: rgba(255, 255, 255, 0.3);
+  transform: scale(1.1);
+}
+
+.search-results-info {
+  text-align: center;
+  color: rgba(255, 255, 255, 0.8);
+  font-size: 0.85rem;
+  margin-top: 8px;
+  font-style: italic;
+}
+
+.search-highlight {
+  background: #ffeb3b;
+  color: #333;
+  padding: 1px 2px;
+  border-radius: 2px;
+  font-weight: bold;
+}
+
+.no-search-results {
+  text-align: center;
+  padding: 40px 20px;
+  color: #666;
+}
+
+.no-search-results p {
+  margin-bottom: 10px;
+}
+
+.link-btn {
+  background: none;
+  border: none;
+  color: #6264a7;
+  cursor: pointer;
+  text-decoration: underline;
+  font-size: inherit;
+}
+
+.link-btn:hover {
+  color: #464775;
+}
+
+/* Responsive adjustments for search */
+@media (max-width: 768px) {
+  .search-container {
+    max-width: 100%;
+    margin: 10px 0;
+  }
+
+  .search-input {
+    padding: 10px 35px 10px 35px;
+    font-size: 0.9rem;
+  }
+
+  .search-icon {
+    left: 10px;
+    font-size: 0.9rem;
+  }
+
+  .clear-search {
+    right: 10px;
+    width: 22px;
+    height: 22px;
+    font-size: 0.75rem;
+  }
+}

@@ -3,7 +3,7 @@ User-agent: *
 Allow: /
 
 # Sitemap
-Sitemap: https://your-domain.com/sitemap.xml
+Sitemap: https://team.mahdibagherivar.ir/sitemap.xml
 
 # Disallow sensitive paths
 Disallow: /api/
