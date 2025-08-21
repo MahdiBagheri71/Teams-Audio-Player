@@ -1,24 +1,19 @@
 {
-  "name": "teams-chat-audio-player",
+  "name": "teams-audio-player",
   "version": "1.0.0",
   "private": true,
   "homepage": ".",
-  "description": "Play audio files from Microsoft Teams chat messages",
-  "keywords": [
-    "microsoft-teams",
-    "audio-player",
-    "react",
-    "msal"
-  ],
-  "author": "Your Name",
-  "license": "MIT",
   "dependencies": {
     "@azure/msal-browser": "^3.5.0",
     "@azure/msal-react": "^2.0.5",
     "@microsoft/microsoft-graph-client": "^3.0.7",
+    "@testing-library/jest-dom": "^5.16.4",
+    "@testing-library/react": "^13.3.0",
+    "@testing-library/user-event": "^13.5.0",
     "react": "^18.2.0",
     "react-dom": "^18.2.0",
-    "react-scripts": "5.0.1"
+    "react-scripts": "5.0.1",
+    "web-vitals": "^2.1.4"
   },
   "scripts": {
     "start": "react-scripts start",
@@ -33,31 +28,13 @@
     "lint:fix": "npx eslint src --ext .js,.jsx --fix",
     "format": "npx prettier --write src/**/*.{js,jsx,css,json}",
     "type-check": "npx tsc --noEmit",
-    "pre-commit": "npm run lint && npm run format && npm run test -- --watchAll=false",
-    "deploy": "npm run build && npx gh-pages -d build"
+    "pre-commit": "npm run lint && npm run format && npm run test -- --watchAll=false"
   },
   "eslintConfig": {
     "extends": [
       "react-app",
       "react-app/jest"
-    ],
-    "rules": {
-      "no-unused-vars": [
-        "warn",
-        {
-          "argsIgnorePattern": "^_"
-        }
-      ],
-      "no-console": [
-        "warn",
-        {
-          "allow": [
-            "warn",
-            "error"
-          ]
-        }
-      ]
-    }
+    ]
   },
   "browserslist": {
     "production": [
@@ -72,15 +49,7 @@
     ]
   },
   "devDependencies": {
-    "@testing-library/jest-dom": "^5.16.4",
-    "@testing-library/react": "^13.3.0",
-    "@testing-library/user-event": "^13.5.0",
     "eslint": "^8.25.0",
-    "prettier": "^2.7.1",
-    "web-vitals": "^2.1.4"
-  },
-  "engines": {
-    "node": ">=16.0.0",
-    "npm": ">=8.0.0"
+    "prettier": "^2.7.1"
   }
 }
