@@ -1,0 +1,267 @@
+/* src/components/ChatSelector.css */
+.chat-selector {
+  background: white;
+  border-radius: 12px;
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.1);
+  overflow: hidden;
+  margin-top: 20px;
+}
+
+.selector-header {
+  background: linear-gradient(135deg, #6264a7, #464775);
+  color: white;
+  padding: 25px;
+  text-align: center;
+}
+
+.selector-header h2 {
+  margin: 0 0 10px 0;
+  font-size: 1.6rem;
+}
+
+.selector-header p {
+  margin: 0 0 15px 0;
+  opacity: 0.9;
+  font-size: 0.95rem;
+}
+
+.refresh-btn {
+  background: rgba(255, 255, 255, 0.2);
+  color: white;
+  border: 1px solid rgba(255, 255, 255, 0.3);
+  padding: 8px 16px;
+  border-radius: 6px;
+  cursor: pointer;
+  font-size: 0.9rem;
+  transition: all 0.2s ease;
+}
+
+.refresh-btn:hover {
+  background: rgba(255, 255, 255, 0.3);
+}
+
+.chat-list {
+  max-height: 500px;
+  overflow-y: auto;
+}
+
+.chat-item {
+  display: flex;
+  align-items: center;
+  padding: 20px;
+  border-bottom: 1px solid #f0f0f0;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.chat-item:hover {
+  background: rgba(98, 100, 167, 0.05);
+}
+
+.chat-item.selected {
+  background: rgba(98, 100, 167, 0.1);
+  border-left: 4px solid #6264a7;
+}
+
+.chat-item.scanning {
+  background: rgba(255, 193, 7, 0.1);
+  cursor: wait;
+}
+
+.chat-icon {
+  display: flex;
+  align-items: center;
+  margin-right: 15px;
+  position: relative;
+}
+
+.type-icon {
+  font-size: 2rem;
+  margin-right: 5px;
+}
+
+.audio-indicator {
+  position: absolute;
+  top: -5px;
+  right: -5px;
+  background: #28a745;
+  border-radius: 50%;
+  padding: 2px;
+  font-size: 0.8rem;
+  animation: bounce 2s infinite;
+}
+
+@keyframes bounce {
+  0%,
+  20%,
+  50%,
+  80%,
+  100% {
+    transform: translateY(0);
+  }
+  40% {
+    transform: translateY(-5px);
+  }
+  60% {
+    transform: translateY(-3px);
+  }
+}
+
+.chat-content {
+  flex: 1;
+  min-width: 0;
+}
+
+.chat-title {
+  font-weight: 500;
+  color: #333;
+  margin-bottom: 5px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  font-size: 1.1rem;
+}
+
+.chat-meta {
+  font-size: 0.85rem;
+  color: #666;
+}
+
+.chat-meta .separator {
+  margin: 0 8px;
+  opacity: 0.5;
+}
+
+.chat-type {
+  background: #e9ecef;
+  color: #495057;
+  padding: 2px 8px;
+  border-radius: 12px;
+  font-size: 0.75rem;
+  font-weight: 500;
+}
+
+.chat-actions {
+  display: flex;
+  align-items: center;
+}
+
+.scan-btn {
+  background: #6264a7;
+  color: white;
+  border: none;
+  padding: 10px 16px;
+  border-radius: 6px;
+  cursor: pointer;
+  font-size: 0.9rem;
+  transition: all 0.2s ease;
+  white-space: nowrap;
+}
+
+.scan-btn:hover {
+  background: #464775;
+  transform: translateY(-1px);
+}
+
+.scanning-indicator {
+  display: flex;
+  align-items: center;
+  color: #f39c12;
+  font-size: 0.9rem;
+}
+
+.spinner {
+  margin-right: 8px;
+  animation: spin 1s linear infinite;
+}
+
+@keyframes spin {
+  from {
+    transform: rotate(0deg);
+  }
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+.empty-chats {
+  text-align: center;
+  padding: 40px 20px;
+}
+
+.empty-chats p {
+  font-size: 1.1rem;
+  color: #666;
+  margin-bottom: 20px;
+}
+
+.selector-help {
+  background: #f8f9fa;
+  padding: 20px;
+  margin: 0;
+  border-top: 1px solid #e9ecef;
+}
+
+.selector-help h4 {
+  color: #495057;
+  margin-bottom: 12px;
+}
+
+.selector-help ul {
+  color: #666;
+  line-height: 1.6;
+  margin: 0;
+}
+
+.selector-help li {
+  margin-bottom: 8px;
+}
+
+.selector-help strong {
+  color: #495057;
+}
+
+/* Scrollbar */
+.chat-list::-webkit-scrollbar {
+  width: 6px;
+}
+
+.chat-list::-webkit-scrollbar-track {
+  background: #f1f1f1;
+}
+
+.chat-list::-webkit-scrollbar-thumb {
+  background: #6264a7;
+  border-radius: 3px;
+}
+
+.chat-list::-webkit-scrollbar-thumb:hover {
+  background: #464775;
+}
+
+/* Responsive */
+@media (max-width: 768px) {
+  .chat-item {
+    flex-direction: column;
+    align-items: flex-start;
+    padding: 15px;
+  }
+
+  .chat-icon {
+    margin-right: 0;
+    margin-bottom: 10px;
+    align-self: center;
+  }
+
+  .chat-actions {
+    margin-top: 10px;
+    width: 100%;
+    justify-content: center;
+  }
+
+  .scan-btn,
+  .scanning-indicator {
+    width: 100%;
+    justify-content: center;
+  }
+}

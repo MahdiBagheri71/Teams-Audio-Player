@@ -14,195 +14,251 @@ class AudioService {
     this.audioMimeTypes = ['audio/', 'application/ogg'];
   }
 
-  async getTeamsAudioFiles() {
+  async getUserChats() {
     try {
-      const audioFiles = [];
+      console.log('📞 Fetching user chats...');
 
-      // Get all user chats
-      console.log('Fetching chats...');
-      const chats = await this.graphClient.api('/me/chats').top(50).get();
+      const chats = await this.graphClient
+        .api('/me/chats')
+        .select('id,topic,chatType,createdDateTime,lastUpdatedDateTime')
+        .top(50)
+        .get();
 
-      console.log(`Found ${chats.value.length} chats`);
+      console.log(`✅ Found ${chats.value.length} chats`);
 
-      // Process each chat
-      for (const chat of chats.value) {
+      // Format chat objects
+      const formattedChats = chats.value.map((chat) => ({
+        id: chat.id,
+        title: this.getChatTitle(chat),
+        type: chat.chatType,
+        lastUpdated: new Date(chat.lastUpdatedDateTime),
+        hasAudio: null, // Will be checked later if needed
+      }));
+
+      return formattedChats;
+    } catch (error) {
+      console.error('❌ Failed to fetch chats:', error);
+      throw new Error(`Failed to load chats: ${error.message}`);
+    }
+  }
+
+  // گرفتن فایل‌های یک چت مشخص
+  async getChatAudioFiles(chatId, chatTitle) {
+    const audioFiles = [];
+
+    try {
+      console.log(`📨 Getting audio files from chat: ${chatTitle}`);
+
+      // Get messages from specific chat
+      const messages = await this.graphClient
+        .api(`/chats/${chatId}/messages`)
+        .top(50)
+        .orderby('createdDateTime desc')
+        .get();
+
+      console.log(`📝 Found ${messages.value.length} messages in chat`);
+
+      let totalAttachments = 0;
+      let audioAttachments = 0;
+
+      // Process each message
+      for (const message of messages.value) {
         try {
-          const chatFiles = await this.getChatAudioFiles(chat);
-          audioFiles.push(...chatFiles);
-        } catch (error) {
-          console.warn(`Failed to process chat ${chat.id}:`, error);
+          // Check attachments
+          if (message.attachments && message.attachments.length > 0) {
+            totalAttachments += message.attachments.length;
+            console.log(
+              `📎 Message has ${message.attachments.length} attachments`
+            );
+
+            // Filter audio attachments
+            const audioFiles_inMessage = message.attachments.filter(
+              (attachment) => {
+                const isAudio = this.isAudioFile(attachment);
+                if (isAudio) {
+                  audioAttachments++;
+                  console.log(`🎵 Found audio: ${attachment.name}`);
+                }
+                return isAudio;
+              }
+            );
+
+            // Create audio file objects
+            for (const attachment of audioFiles_inMessage) {
+              const audioFile = this.createDisplayAudioFile(
+                attachment,
+                message,
+                { title: chatTitle }
+              );
+              if (audioFile) {
+                audioFiles.push(audioFile);
+              }
+            }
+          }
+
+          // Check for shared audio links in message body
+          if (message.body && message.body.content) {
+            const sharedFiles = this.extractSharedAudioFiles(
+              message.body.content,
+              message,
+              { title: chatTitle }
+            );
+            if (sharedFiles.length > 0) {
+              audioFiles.push(...sharedFiles);
+              console.log(`🔗 Found ${sharedFiles.length} shared links`);
+            }
+          }
+        } catch (messageError) {
+          console.warn(`❌ Failed to process message:`, messageError);
         }
       }
 
-      // Also check OneDrive for shared audio files
-      try {
-        const driveFiles = await this.getOneDriveAudioFiles();
-        audioFiles.push(...driveFiles);
-      } catch (error) {
-        console.warn('Failed to fetch OneDrive files:', error);
-      }
+      console.log(
+        `📊 Chat summary - Total attachments: ${totalAttachments}, Audio files: ${audioAttachments}`
+      );
+      console.log(`✅ Found ${audioFiles.length} total audio files in chat`);
 
       // Sort by date (newest first)
       return audioFiles.sort((a, b) => new Date(b.date) - new Date(a.date));
     } catch (error) {
-      console.error('Failed to fetch Teams audio files:', error);
-      throw error;
+      console.error(`❌ Failed to get audio files from chat ${chatId}:`, error);
+      throw new Error(`Failed to load audio files: ${error.message}`);
     }
   }
 
-  async getChatAudioFiles(chat) {
-    const audioFiles = [];
-
+  // Quick scan to see if chat has audio files
+  async quickScanChatForAudio(chatId) {
     try {
-      // Get messages from chat
       const messages = await this.graphClient
-        .api(`/chats/${chat.id}/messages`)
-        .top(100)
-        .expand('attachments')
-        .get();
-
-      for (const message of messages.value) {
-        if (message.attachments && message.attachments.length > 0) {
-          const audioAttachments = message.attachments.filter((attachment) =>
-            this.isAudioFile(attachment)
-          );
-
-          for (const attachment of audioAttachments) {
-            const audioFile = await this.createAudioFileObject(
-              attachment,
-              message,
-              chat,
-              'chat'
-            );
-            if (audioFile) {
-              audioFiles.push(audioFile);
-            }
-          }
-        }
-
-        // Check for shared OneDrive links in message body
-        if (message.body && message.body.content) {
-          const sharedFiles = await this.extractSharedAudioFiles(
-            message.body.content,
-            message,
-            chat
-          );
-          audioFiles.push(...sharedFiles);
-        }
-      }
-    } catch (error) {
-      console.warn(`Failed to get messages for chat ${chat.id}:`, error);
-    }
-
-    return audioFiles;
-  }
-
-  async getOneDriveAudioFiles() {
-    const audioFiles = [];
-
-    try {
-      // Search for audio files in OneDrive
-      const searchResults = await this.graphClient
-        .api("/me/drive/root/search(q='.mp3 OR .wav OR .m4a OR .aac')")
+        .api(`/chats/${chatId}/messages`)
         .top(50)
         .get();
 
-      for (const file of searchResults.value) {
-        if (this.isAudioFile(file)) {
-          const audioFile = {
-            id: file.id,
-            name: file.name,
-            downloadUrl: file['@microsoft.graph.downloadUrl'],
-            webUrl: file.webUrl,
-            size: file.size,
-            source: 'onedrive',
-            location: 'OneDrive',
-            sender: 'Me',
-            date: new Date(file.lastModifiedDateTime),
-            duration: null,
-            type: file.file?.mimeType || 'audio/mpeg',
-          };
-          audioFiles.push(audioFile);
+      let hasAudio = false;
+      for (const message of messages.value) {
+        if (message.attachments && message.attachments.length > 0) {
+          const audioFiles = message.attachments.filter((att) =>
+            this.isAudioFile(att)
+          );
+          if (audioFiles.length > 0) {
+            hasAudio = true;
+            break;
+          }
+        }
+
+        // Check for audio links
+        if (message.body && message.body.content) {
+          const urlRegex =
+            /https:\/\/[^\s<>"]+\.(mp3|wav|m4a|aac|ogg|wma|flac)(\?[^\s<>"]*)?/gi;
+          if (message.body.content.match(urlRegex)) {
+            hasAudio = true;
+            break;
+          }
         }
       }
-    } catch (error) {
-      console.warn('Failed to search OneDrive:', error);
-    }
 
-    return audioFiles;
+      return hasAudio;
+    } catch (error) {
+      console.warn(`⚠️ Could not scan chat ${chatId} for audio`);
+      return false;
+    }
   }
 
-  async createAudioFileObject(attachment, message, chat, source) {
+  getChatTitle(chat) {
+    if (chat.topic) {
+      return chat.topic;
+    }
+
+    if (chat.chatType === 'oneOnOne') {
+      return 'One-on-One Chat';
+    }
+
+    if (chat.chatType === 'group') {
+      return 'Group Chat';
+    }
+
+    return 'Unknown Chat';
+  }
+
+  createDisplayAudioFile(attachment, message, chat) {
     try {
-      // Get download URL for attachment
-      let downloadUrl = attachment.contentUrl;
-
-      if (source === 'chat' && attachment.id) {
-        try {
-          // Try to get direct download URL from Graph API
-          const attachmentDetails = await this.graphClient
-            .api(
-              `/chats/${chat.id}/messages/${message.id}/attachments/${attachment.id}`
-            )
-            .get();
-
-          downloadUrl = attachmentDetails.contentUrl || downloadUrl;
-        } catch (error) {
-          console.warn('Failed to get attachment details:', error);
-        }
-      }
-
-      return {
-        id: attachment.id || `${message.id}_${attachment.name}`,
-        name: attachment.name,
-        downloadUrl: downloadUrl,
-        webUrl: attachment.contentUrl,
+      const audioFile = {
+        id: attachment.id || `${message.id}_${Date.now()}`,
+        name: attachment.name || 'Unknown Audio',
+        downloadUrl: null, // Teams attachments aren't directly accessible
+        webUrl: message.webUrl, // Link to Teams message
         size: attachment.size || 0,
-        source: source,
-        location: chat.topic || chat.chatType || 'Chat',
+        source: 'teams_chat',
+        location: chat.title,
         sender: message.from?.user?.displayName || 'Unknown',
         date: new Date(message.createdDateTime),
         duration: null,
         type: attachment.contentType || 'audio/mpeg',
+        canPlay: false, // Can't play Teams attachments directly
+        teamsMessageUrl: message.webUrl,
+        instructions: 'Click to open in Teams and download',
       };
+
+      return audioFile;
     } catch (error) {
-      console.error('Failed to create audio file object:', error);
+      console.error('❌ Failed to create display audio file:', error);
       return null;
     }
   }
 
-  async extractSharedAudioFiles(messageContent, message, chat) {
+  extractSharedAudioFiles(messageContent, message, chat) {
     const audioFiles = [];
 
-    // Look for OneDrive/SharePoint links in message content
-    const urlRegex = /https:\/\/[^\s]+\.(mp3|wav|m4a|aac|ogg|wma|flac)/gi;
-    const matches = messageContent.match(urlRegex);
+    try {
+      // Look for direct audio URLs
+      const urlRegex =
+        /https:\/\/[^\s<>"]+\.(mp3|wav|m4a|aac|ogg|wma|flac)(\?[^\s<>"]*)?/gi;
+      const matches = messageContent.match(urlRegex);
 
-    if (matches) {
-      for (const url of matches) {
-        try {
-          // Extract filename from URL
-          const filename = url.split('/').pop();
+      if (matches) {
+        console.log(`🔗 Found ${matches.length} direct audio URLs`);
 
-          const audioFile = {
-            id: `shared_${message.id}_${filename}`,
-            name: filename,
-            downloadUrl: url,
-            webUrl: url,
-            size: 0,
-            source: 'shared_link',
-            location: chat.topic || 'Chat',
-            sender: message.from?.user?.displayName || 'Unknown',
-            date: new Date(message.createdDateTime),
-            duration: null,
-            type: 'audio/mpeg',
-          };
+        for (const url of matches) {
+          try {
+            const filename = decodeURIComponent(
+              url.split('/').pop().split('?')[0]
+            );
 
-          audioFiles.push(audioFile);
-        } catch (error) {
-          console.warn('Failed to process shared audio link:', error);
+            const audioFile = {
+              id: `shared_${message.id}_${Date.now()}_${Math.random()}`,
+              name: filename,
+              downloadUrl: url,
+              webUrl: url,
+              size: 0,
+              source: 'shared_url',
+              location: chat.title,
+              sender: message.from?.user?.displayName || 'Unknown',
+              date: new Date(message.createdDateTime),
+              duration: null,
+              type: 'audio/mpeg',
+              canPlay: true,
+              instructions: 'Direct link - may require permissions',
+            };
+
+            audioFiles.push(audioFile);
+          } catch (error) {
+            console.warn('❌ Failed to process audio URL:', error);
+          }
         }
       }
+
+      // Look for OneDrive/SharePoint share links
+      const shareRegex =
+        /https:\/\/[^\/]*1drv\.ms\/[^\s<>"]+|https:\/\/[^\/]*sharepoint\.com\/[^\s<>"]+/gi;
+      const shareMatches = messageContent.match(shareRegex);
+
+      if (shareMatches) {
+        console.log(
+          `🔗 Found ${shareMatches.length} share links (may contain audio)`
+        );
+      }
+    } catch (error) {
+      console.error('❌ Failed to extract shared audio files:', error);
     }
 
     return audioFiles;
@@ -213,51 +269,48 @@ class AudioService {
 
     // Check by MIME type
     if (file.contentType) {
-      return this.audioMimeTypes.some((type) =>
+      const isAudioMime = this.audioMimeTypes.some((type) =>
         file.contentType.toLowerCase().startsWith(type)
       );
+      if (isAudioMime) return true;
     }
 
     // Check by file extension
     if (file.name) {
       const extension = file.name.toLowerCase();
-      return this.audioExtensions.some((ext) => extension.endsWith(ext));
+      const isAudioExt = this.audioExtensions.some((ext) =>
+        extension.endsWith(ext)
+      );
+      if (isAudioExt) return true;
     }
 
     return false;
   }
 
-  async getAudioMetadata(audioFile) {
+  // Test basic access
+  async testBasicAccess() {
     try {
-      // Create audio element to get metadata
-      const audio = new Audio();
+      console.log('🧪 Testing basic Graph API access...');
 
-      return new Promise((resolve) => {
-        audio.addEventListener('loadedmetadata', () => {
-          resolve({
-            duration: audio.duration,
-            title: audioFile.name,
-            artist: audioFile.sender,
-          });
-        });
+      const me = await this.graphClient.api('/me').get();
+      console.log('✅ Profile access:', me.displayName);
 
-        audio.addEventListener('error', () => {
-          resolve({
-            duration: 0,
-            title: audioFile.name,
-            artist: audioFile.sender,
-          });
-        });
+      const chats = await this.graphClient.api('/me/chats').top(3).get();
+      console.log('✅ Chats access:', chats.value.length, 'chats');
 
-        audio.src = audioFile.downloadUrl;
-      });
+      if (chats.value.length > 0) {
+        const firstChat = chats.value[0];
+        const messages = await this.graphClient
+          .api(`/chats/${firstChat.id}/messages`)
+          .top(50)
+          .get();
+        console.log('✅ Messages access:', messages.value.length, 'messages');
+      }
+
+      return true;
     } catch (error) {
-      console.warn('Failed to get audio metadata:', error);
-      return {
-        duration: 0,
-        title: audioFile.name,
-        artist: audioFile.sender,
-      };
+      console.error('❌ Basic access test failed:', error);
+      return false;
     }
   }
 }
