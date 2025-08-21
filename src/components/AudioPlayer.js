@@ -1,5 +1,5 @@
-// src/components/AudioPlayer.js - Fixed with auto-play
-import React, { useRef, useEffect } from 'react';
+// src/components/AudioPlayer.js - Simplified (hook handles auto-play)
+import React from 'react';
 import './AudioPlayer.css';
 
 const AudioPlayer = ({
@@ -24,113 +24,26 @@ const AudioPlayer = ({
   onRefresh,
   totalTracks,
 }) => {
-  const audioRef = useRef(null);
-
-  // Handle auto-play next song when current song ends
-  useEffect(() => {
-    const audio = audioRef.current;
-
-    if (audio && currentTrack) {
-      const handleEnded = () => {
-        console.log('🔚 Song ended');
-
-        if (repeat === 'one') {
-          // Repeat current song
-          console.log('🔂 Repeating current song');
-          audio.currentTime = 0;
-          audio.play().catch(console.error);
-        } else if (repeat === 'all' || repeat !== 'none') {
-          // Play next song, or loop to first if at end
-          console.log('🔁 Auto-playing next (repeat all mode)');
-          playNext();
-        } else {
-          // Normal auto-play next (if not last song)
-          if (currentIndex < totalTracks - 1) {
-            console.log(`⏭️ Auto-playing next track: ${currentIndex + 1}`);
-            playNext();
-          } else {
-            console.log('🏁 Reached end of playlist');
-          }
-        }
-      };
-
-      const handleLoadedData = () => {
-        console.log('📀 Audio loaded:', currentTrack.name);
-      };
-
-      const handleError = () => {
-        console.error('❌ Audio error for:', currentTrack.name);
-      };
-
-      // Add event listeners
-      audio.addEventListener('ended', handleEnded);
-      audio.addEventListener('loadeddata', handleLoadedData);
-      audio.addEventListener('error', handleError);
-
-      return () => {
-        audio.removeEventListener('ended', handleEnded);
-        audio.removeEventListener('loadeddata', handleLoadedData);
-        audio.removeEventListener('error', handleError);
-      };
-    }
-  }, [currentTrack, currentIndex, totalTracks, repeat, playNext]);
-
-  // Update audio source when track changes
-  useEffect(() => {
-    const audio = audioRef.current;
-
-    if (audio && currentTrack?.downloadUrl) {
-      console.log('🎵 Setting audio source:', currentTrack.name);
-      audio.src = currentTrack.downloadUrl;
-      audio.load(); // Force reload
-
-      // Play if should be playing
-      if (isPlaying) {
-        audio.play().catch((error) => {
-          console.error('❌ Failed to auto-play:', error);
-        });
-      }
-    }
-  }, [currentTrack]);
-
-  // Handle play/pause state changes
-  useEffect(() => {
-    const audio = audioRef.current;
-
-    if (audio && currentTrack) {
-      if (isPlaying) {
-        audio.play().catch((error) => {
-          console.error('❌ Failed to play:', error);
-        });
-      } else {
-        audio.pause();
-      }
-    }
-  }, [isPlaying, currentTrack]);
-
-  // Handle volume changes
-  useEffect(() => {
-    const audio = audioRef.current;
-    if (audio) {
-      audio.volume = Math.max(0, Math.min(1, volume));
-    }
-  }, [volume]);
-
-  // Handle seek changes
-  useEffect(() => {
-    const audio = audioRef.current;
-    if (audio && Math.abs(audio.currentTime - currentTime) > 1) {
-      audio.currentTime = currentTime;
-    }
-  }, [currentTime]);
-
   const handleProgressClick = (e) => {
+    if (!currentTrack || !duration) return;
+
     const progressBar = e.currentTarget;
     const rect = progressBar.getBoundingClientRect();
     const clickX = e.clientX - rect.left;
     const percentage = clickX / rect.width;
     const newTime = duration * percentage;
+
     seek(newTime);
+  };
+
+  const handleVolumeChange = (e) => {
+    const newVolume = parseFloat(e.target.value);
+    setVolume(newVolume);
+  };
+
+  const handleMuteToggle = () => {
+    const newVolume = volume === 0 ? 1 : 0;
+    setVolume(newVolume);
   };
 
   const progressPercentage = duration > 0 ? (currentTime / duration) * 100 : 0;
@@ -156,33 +69,38 @@ const AudioPlayer = ({
     return '🔊';
   };
 
+  const getAutoPlayStatus = () => {
+    if (totalTracks <= 1) return 'Single track';
+    if (repeat === 'one') return 'Repeat current';
+    if (repeat === 'all') return 'Loop playlist';
+    return `${totalTracks - currentIndex - 1} tracks remaining`;
+  };
+
   return (
     <div className="audio-player">
-      {/* Hidden audio element for actual playback */}
-      <audio ref={audioRef} />
-
       {/* Track Info */}
       <div className="track-info-section">
         {currentTrack ? (
           <>
             <div className="track-details">
-              <h3 className="track-title">{currentTrack.name}</h3>
+              <h3 className="track-title" title={currentTrack.name}>
+                {currentTrack.name}
+              </h3>
               <p className="track-meta">
-                {currentTrack.sender} • {currentTrack.location}
+                👤 {currentTrack.sender} • 📍 {currentTrack.location}
                 {totalTracks > 0 && (
                   <span className="track-position">
                     • Track {currentIndex + 1} of {totalTracks}
                   </span>
                 )}
               </p>
-              {currentTrack.source && (
-                <p className="track-source">
-                  Source:{' '}
-                  {currentTrack.source === 'shared_url'
-                    ? '🔗 Shared Link'
-                    : '📁 File Attachment'}
-                </p>
-              )}
+              <p className="track-source">
+                📎{' '}
+                {currentTrack.source === 'shared_url'
+                  ? 'Shared Link'
+                  : 'File Attachment'}
+                {currentTrack.canPlay ? ' • ✅ Playable' : ' • ❌ Not playable'}
+              </p>
             </div>
             <div className="track-actions">
               <button
@@ -196,7 +114,8 @@ const AudioPlayer = ({
           </>
         ) : (
           <div className="no-track">
-            <p>No track selected</p>
+            <p>🎵 No track selected</p>
+            <p>Select a track from the playlist to start</p>
             {totalTracks === 0 && (
               <button onClick={onRefresh} className="btn-refresh">
                 🔄 Load Audio Files
@@ -207,11 +126,11 @@ const AudioPlayer = ({
       </div>
 
       {/* Auto-play Status */}
-      {totalTracks > 1 && (
+      {totalTracks > 0 && (
         <div className="autoplay-status">
           <div className="autoplay-indicators">
             <span className="indicator">
-              🔄 <strong>Auto-play:</strong> {totalTracks > 1 ? 'ON' : 'OFF'}
+              🎵 <strong>Auto-play:</strong> {getAutoPlayStatus()}
             </span>
             {shuffle && (
               <span className="indicator">
@@ -227,6 +146,9 @@ const AudioPlayer = ({
                 : 'OFF'}
             </span>
           </div>
+          <div className="playback-info">
+            ℹ️ Hook handles auto-play when songs end
+          </div>
         </div>
       )}
 
@@ -235,14 +157,21 @@ const AudioPlayer = ({
         <span className="time-display current-time">
           {formatTime(currentTime)}
         </span>
-        <div className="progress-bar" onClick={handleProgressClick}>
+        <div
+          className="progress-bar"
+          onClick={handleProgressClick}
+          style={{ cursor: currentTrack && duration ? 'pointer' : 'default' }}
+        >
           <div
             className="progress-fill"
             style={{ width: `${progressPercentage}%` }}
           />
           <div
             className="progress-handle"
-            style={{ left: `${progressPercentage}%` }}
+            style={{
+              left: `${progressPercentage}%`,
+              opacity: currentTrack && duration ? 1 : 0,
+            }}
           />
         </div>
         <span className="time-display total-time">{formatTime(duration)}</span>
@@ -300,7 +229,7 @@ const AudioPlayer = ({
       <div className="volume-section">
         <button
           className="btn-volume"
-          onClick={() => setVolume(volume === 0 ? 1 : 0)}
+          onClick={handleMuteToggle}
           title={volume === 0 ? 'Unmute' : 'Mute'}
         >
           {getVolumeIcon()}
@@ -312,7 +241,7 @@ const AudioPlayer = ({
           max="1"
           step="0.01"
           value={volume}
-          onChange={(e) => setVolume(parseFloat(e.target.value))}
+          onChange={handleVolumeChange}
           title={`Volume: ${Math.round(volume * 100)}%`}
         />
         <span className="volume-display">{Math.round(volume * 100)}%</span>
@@ -321,15 +250,15 @@ const AudioPlayer = ({
       {/* Status Messages */}
       {loading && (
         <div className="status-message loading">
-          Loading track... {currentTrack?.name}
+          ⏳ Loading: {currentTrack?.name || 'track'}
         </div>
       )}
 
-      {error && <div className="status-message error">{error}</div>}
+      {error && <div className="status-message error">❌ {error}</div>}
 
-      {!currentTrack && totalTracks === 0 && (
+      {!currentTrack && totalTracks > 0 && !loading && (
         <div className="status-message info">
-          No audio files available. Select a chat with audio files.
+          📋 {totalTracks} tracks loaded. Click one to start playing!
         </div>
       )}
     </div>

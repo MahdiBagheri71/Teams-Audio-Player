@@ -387,3 +387,60 @@
     justify-content: center;
   }
 }
+
+/* Add these improvements to your existing AudioPlayer.css */
+
+.autoplay-status .playback-info {
+  margin-top: 0.8rem;
+  font-size: 0.8rem;
+  opacity: 0.8;
+  font-style: italic;
+  text-align: center;
+}
+
+.track-title {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  max-width: 100%;
+}
+
+.btn-control:disabled {
+  opacity: 0.3;
+  cursor: not-allowed;
+  transform: none !important;
+  box-shadow: none !important;
+}
+
+.btn-control:disabled:hover {
+  background: rgba(255, 255, 255, 0.2) !important;
+  transform: none !important;
+}
+
+.progress-bar {
+  position: relative;
+}
+
+.progress-handle {
+  transition: opacity 0.2s ease;
+}
+
+.status-message.info {
+  background: rgba(101, 186, 255, 0.2);
+  border: 1px solid rgba(101, 186, 255, 0.4);
+  color: white;
+}
+
+/* Debug info - Remove this in production */
+.debug-info {
+  position: fixed;
+  top: 10px;
+  right: 10px;
+  background: rgba(0, 0, 0, 0.8);
+  color: white;
+  padding: 10px;
+  font-size: 0.8rem;
+  border-radius: 6px;
+  z-index: 1000;
+  max-width: 300px;
+}
