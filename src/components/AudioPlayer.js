@@ -1,5 +1,5 @@
-// src/components/AudioPlayer.js
-import React from 'react';
+// src/components/AudioPlayer.js - Fixed with auto-play
+import React, { useRef, useEffect } from 'react';
 import './AudioPlayer.css';
 
 const AudioPlayer = ({
@@ -24,6 +24,106 @@ const AudioPlayer = ({
   onRefresh,
   totalTracks,
 }) => {
+  const audioRef = useRef(null);
+
+  // Handle auto-play next song when current song ends
+  useEffect(() => {
+    const audio = audioRef.current;
+
+    if (audio && currentTrack) {
+      const handleEnded = () => {
+        console.log('🔚 Song ended');
+
+        if (repeat === 'one') {
+          // Repeat current song
+          console.log('🔂 Repeating current song');
+          audio.currentTime = 0;
+          audio.play().catch(console.error);
+        } else if (repeat === 'all' || repeat !== 'none') {
+          // Play next song, or loop to first if at end
+          console.log('🔁 Auto-playing next (repeat all mode)');
+          playNext();
+        } else {
+          // Normal auto-play next (if not last song)
+          if (currentIndex < totalTracks - 1) {
+            console.log(`⏭️ Auto-playing next track: ${currentIndex + 1}`);
+            playNext();
+          } else {
+            console.log('🏁 Reached end of playlist');
+          }
+        }
+      };
+
+      const handleLoadedData = () => {
+        console.log('📀 Audio loaded:', currentTrack.name);
+      };
+
+      const handleError = () => {
+        console.error('❌ Audio error for:', currentTrack.name);
+      };
+
+      // Add event listeners
+      audio.addEventListener('ended', handleEnded);
+      audio.addEventListener('loadeddata', handleLoadedData);
+      audio.addEventListener('error', handleError);
+
+      return () => {
+        audio.removeEventListener('ended', handleEnded);
+        audio.removeEventListener('loadeddata', handleLoadedData);
+        audio.removeEventListener('error', handleError);
+      };
+    }
+  }, [currentTrack, currentIndex, totalTracks, repeat, playNext]);
+
+  // Update audio source when track changes
+  useEffect(() => {
+    const audio = audioRef.current;
+
+    if (audio && currentTrack?.downloadUrl) {
+      console.log('🎵 Setting audio source:', currentTrack.name);
+      audio.src = currentTrack.downloadUrl;
+      audio.load(); // Force reload
+
+      // Play if should be playing
+      if (isPlaying) {
+        audio.play().catch((error) => {
+          console.error('❌ Failed to auto-play:', error);
+        });
+      }
+    }
+  }, [currentTrack]);
+
+  // Handle play/pause state changes
+  useEffect(() => {
+    const audio = audioRef.current;
+
+    if (audio && currentTrack) {
+      if (isPlaying) {
+        audio.play().catch((error) => {
+          console.error('❌ Failed to play:', error);
+        });
+      } else {
+        audio.pause();
+      }
+    }
+  }, [isPlaying, currentTrack]);
+
+  // Handle volume changes
+  useEffect(() => {
+    const audio = audioRef.current;
+    if (audio) {
+      audio.volume = Math.max(0, Math.min(1, volume));
+    }
+  }, [volume]);
+
+  // Handle seek changes
+  useEffect(() => {
+    const audio = audioRef.current;
+    if (audio && Math.abs(audio.currentTime - currentTime) > 1) {
+      audio.currentTime = currentTime;
+    }
+  }, [currentTime]);
+
   const handleProgressClick = (e) => {
     const progressBar = e.currentTarget;
     const rect = progressBar.getBoundingClientRect();
@@ -50,8 +150,17 @@ const AudioPlayer = ({
     return repeat !== 'none' ? 'active' : '';
   };
 
+  const getVolumeIcon = () => {
+    if (volume === 0) return '🔇';
+    if (volume < 0.5) return '🔉';
+    return '🔊';
+  };
+
   return (
     <div className="audio-player">
+      {/* Hidden audio element for actual playback */}
+      <audio ref={audioRef} />
+
       {/* Track Info */}
       <div className="track-info-section">
         {currentTrack ? (
@@ -66,6 +175,14 @@ const AudioPlayer = ({
                   </span>
                 )}
               </p>
+              {currentTrack.source && (
+                <p className="track-source">
+                  Source:{' '}
+                  {currentTrack.source === 'shared_url'
+                    ? '🔗 Shared Link'
+                    : '📁 File Attachment'}
+                </p>
+              )}
             </div>
             <div className="track-actions">
               <button
@@ -88,6 +205,30 @@ const AudioPlayer = ({
           </div>
         )}
       </div>
+
+      {/* Auto-play Status */}
+      {totalTracks > 1 && (
+        <div className="autoplay-status">
+          <div className="autoplay-indicators">
+            <span className="indicator">
+              🔄 <strong>Auto-play:</strong> {totalTracks > 1 ? 'ON' : 'OFF'}
+            </span>
+            {shuffle && (
+              <span className="indicator">
+                🔀 <strong>Shuffle:</strong> ON
+              </span>
+            )}
+            <span className="indicator">
+              {getRepeatIcon()} <strong>Repeat:</strong>{' '}
+              {repeat === 'one'
+                ? 'Current Song'
+                : repeat === 'all'
+                ? 'All Songs'
+                : 'OFF'}
+            </span>
+          </div>
+        </div>
+      )}
 
       {/* Progress Bar */}
       <div className="progress-section">
@@ -112,7 +253,7 @@ const AudioPlayer = ({
         <button
           className={`btn-control btn-shuffle ${shuffle ? 'active' : ''}`}
           onClick={toggleShuffle}
-          title="Shuffle"
+          title={`Shuffle: ${shuffle ? 'ON' : 'OFF'}`}
         >
           🔀
         </button>
@@ -120,7 +261,7 @@ const AudioPlayer = ({
         <button
           className="btn-control btn-previous"
           onClick={playPrevious}
-          disabled={loading}
+          disabled={loading || !currentTrack}
           title="Previous track"
         >
           ⏮
@@ -129,7 +270,7 @@ const AudioPlayer = ({
         <button
           className="btn-control btn-play-pause main-play-button"
           onClick={togglePlayPause}
-          disabled={loading}
+          disabled={loading || !currentTrack}
           title={isPlaying ? 'Pause' : 'Play'}
         >
           {loading ? '⏳' : isPlaying ? '⏸' : '▶'}
@@ -138,7 +279,7 @@ const AudioPlayer = ({
         <button
           className="btn-control btn-next"
           onClick={playNext}
-          disabled={loading}
+          disabled={loading || !currentTrack}
           title="Next track"
         >
           ⏭
@@ -147,7 +288,9 @@ const AudioPlayer = ({
         <button
           className={`btn-control btn-repeat ${getRepeatClass()}`}
           onClick={toggleRepeat}
-          title={`Repeat: ${repeat}`}
+          title={`Repeat: ${
+            repeat === 'one' ? 'Current' : repeat === 'all' ? 'All' : 'Off'
+          }`}
         >
           {getRepeatIcon()}
         </button>
@@ -155,8 +298,12 @@ const AudioPlayer = ({
 
       {/* Volume Control */}
       <div className="volume-section">
-        <button className="btn-volume">
-          {volume === 0 ? '🔇' : volume < 0.5 ? '🔉' : '🔊'}
+        <button
+          className="btn-volume"
+          onClick={() => setVolume(volume === 0 ? 1 : 0)}
+          title={volume === 0 ? 'Unmute' : 'Mute'}
+        >
+          {getVolumeIcon()}
         </button>
         <input
           type="range"
@@ -166,16 +313,25 @@ const AudioPlayer = ({
           step="0.01"
           value={volume}
           onChange={(e) => setVolume(parseFloat(e.target.value))}
+          title={`Volume: ${Math.round(volume * 100)}%`}
         />
         <span className="volume-display">{Math.round(volume * 100)}%</span>
       </div>
 
       {/* Status Messages */}
       {loading && (
-        <div className="status-message loading">Loading track...</div>
+        <div className="status-message loading">
+          Loading track... {currentTrack?.name}
+        </div>
       )}
 
       {error && <div className="status-message error">{error}</div>}
+
+      {!currentTrack && totalTracks === 0 && (
+        <div className="status-message info">
+          No audio files available. Select a chat with audio files.
+        </div>
+      )}
     </div>
   );
 };
