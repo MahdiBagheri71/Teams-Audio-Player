@@ -1,0 +1,19 @@
+
+User-agent: *
+Allow: /
+
+# Sitemap
+Sitemap: https://your-domain.com/sitemap.xml
+
+# Disallow sensitive paths
+Disallow: /api/
+Disallow: /.env
+Disallow: /config/
+
+# Allow assets
+Allow: /static/
+Allow: /assets/
+Allow: /images/
+
+# Crawl delay
+Crawl-delay: 1
