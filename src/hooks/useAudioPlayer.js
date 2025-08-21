@@ -1,4 +1,4 @@
-// src/hooks/useAudioPlayer.js - Fixed auto-play
+// src/hooks/useAudioPlayer.js - Simplified and Robust
 import { useState, useRef, useEffect, useCallback } from 'react';
 
 export const useAudioPlayer = () => {
@@ -13,91 +13,112 @@ export const useAudioPlayer = () => {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
   const [shuffle, setShuffle] = useState(false);
-  const [repeat, setRepeat] = useState('none'); // 'none', 'one', 'all'
+  const [repeat, setRepeat] = useState('none');
+  const [canPlayNext, setCanPlayNext] = useState(true); // Anti-loop protection
 
-  // Helper function to get next track index
+  // Simple next/previous index calculation
   const getNextIndex = useCallback(() => {
     if (shuffle) {
-      let nextIndex;
-      do {
-        nextIndex = Math.floor(Math.random() * playlist.length);
-      } while (nextIndex === currentIndex && playlist.length > 1);
-      return nextIndex;
-    } else {
-      return currentIndex + 1;
+      const availableIndices = playlist
+        .map((_, idx) => idx)
+        .filter((idx) => idx !== currentIndex);
+      return availableIndices.length > 0
+        ? availableIndices[Math.floor(Math.random() * availableIndices.length)]
+        : (currentIndex + 1) % playlist.length;
     }
+    return (currentIndex + 1) % playlist.length;
   }, [shuffle, currentIndex, playlist.length]);
 
-  // Helper function to get previous track index
   const getPreviousIndex = useCallback(() => {
     if (shuffle) {
-      let prevIndex;
-      do {
-        prevIndex = Math.floor(Math.random() * playlist.length);
-      } while (prevIndex === currentIndex && playlist.length > 1);
-      return prevIndex;
-    } else {
-      return currentIndex - 1;
+      const availableIndices = playlist
+        .map((_, idx) => idx)
+        .filter((idx) => idx !== currentIndex);
+      return availableIndices.length > 0
+        ? availableIndices[Math.floor(Math.random() * availableIndices.length)]
+        : (currentIndex - 1 + playlist.length) % playlist.length;
     }
+    return (currentIndex - 1 + playlist.length) % playlist.length;
   }, [shuffle, currentIndex, playlist.length]);
 
+  // Simple, reliable loading
   const loadTrack = useCallback(async (track, index) => {
     if (!track || !track.downloadUrl) {
       setError('No valid audio URL');
       return false;
     }
 
-    try {
-      setError(null);
-      setLoading(true);
+    console.log('🎵 Loading track:', track.name);
 
-      console.log('🎵 Loading track:', track.name, 'at index:', index);
+    try {
+      setLoading(true);
+      setError(null);
 
       const audio = audioRef.current;
 
-      // Clear previous source
-      audio.src = '';
-      audio.load();
+      // Stop any current playback
+      audio.pause();
+      setIsPlaying(false);
 
-      // Set new source
+      // Clear and set new source
+      audio.src = '';
       audio.src = track.downloadUrl;
 
+      // Update state immediately
       setCurrentTrack(track);
       setCurrentIndex(index);
+      setCurrentTime(0);
+      setDuration(0);
 
-      // Wait for metadata to load
-      await new Promise((resolve, reject) => {
-        const timeoutId = setTimeout(() => {
-          reject(new Error('Load timeout'));
-        }, 10000); // 10 second timeout
+      // Simple load with reasonable timeout
+      return new Promise((resolve) => {
+        let resolved = false;
 
-        const handleLoadedMetadata = () => {
-          clearTimeout(timeoutId);
-          audio.removeEventListener('loadedmetadata', handleLoadedMetadata);
-          audio.removeEventListener('error', handleError);
+        const cleanup = () => {
+          if (!resolved) {
+            resolved = true;
+            audio.removeEventListener('loadedmetadata', onSuccess);
+            audio.removeEventListener('canplay', onSuccess);
+            audio.removeEventListener('loadeddata', onSuccess);
+            audio.removeEventListener('error', onError);
+            setLoading(false);
+          }
+        };
+
+        const onSuccess = () => {
           console.log('✅ Track loaded successfully:', track.name);
-          resolve();
+          cleanup();
+          resolve(true);
         };
 
-        const handleError = (e) => {
-          clearTimeout(timeoutId);
-          audio.removeEventListener('loadedmetadata', handleLoadedMetadata);
-          audio.removeEventListener('error', handleError);
-          console.error('❌ Failed to load track:', track.name, e);
-          reject(new Error(`Failed to load: ${track.name}`));
+        const onError = (e) => {
+          console.error('❌ Load failed:', track.name, e.type);
+          setError(`Failed to load: ${track.name}`);
+          cleanup();
+          resolve(false);
         };
 
-        audio.addEventListener('loadedmetadata', handleLoadedMetadata);
-        audio.addEventListener('error', handleError);
+        // Add listeners
+        audio.addEventListener('loadedmetadata', onSuccess, { once: true });
+        audio.addEventListener('canplay', onSuccess, { once: true });
+        audio.addEventListener('loadeddata', onSuccess, { once: true });
+        audio.addEventListener('error', onError, { once: true });
+
+        // Set timeout
+        setTimeout(() => {
+          if (!resolved) {
+            console.log('⚠️ Load timeout, but continuing anyway:', track.name);
+            cleanup();
+            resolve(true); // Continue anyway
+          }
+        }, 10000); // 10 second timeout
 
         // Start loading
         audio.load();
       });
-
-      return true;
     } catch (error) {
-      console.error('💥 Load track failed:', error);
-      setError(error.message);
+      console.error('💥 Load error:', error);
+      setError(`Load error: ${error.message}`);
       return false;
     } finally {
       setLoading(false);
@@ -112,13 +133,25 @@ export const useAudioPlayer = () => {
 
     try {
       console.log('▶️ Playing:', currentTrack.name);
-      await audioRef.current.play();
+
+      const audio = audioRef.current;
+      await audio.play();
+
       setIsPlaying(true);
       setError(null);
+      setCanPlayNext(true); // Reset auto-play protection
       return true;
     } catch (error) {
-      console.error('❌ Failed to play:', error);
-      setError('Failed to play audio - ' + error.message);
+      console.error('❌ Play failed:', error);
+
+      if (error.name === 'NotAllowedError') {
+        setError('🔊 Click play button - browser blocked autoplay');
+      } else if (error.name === 'NotSupportedError') {
+        setError('❌ Audio format not supported');
+      } else {
+        setError('❌ Playback failed - check your connection');
+      }
+
       setIsPlaying(false);
       return false;
     }
@@ -131,7 +164,7 @@ export const useAudioPlayer = () => {
   }, []);
 
   const playTrack = useCallback(
-    async (index) => {
+    async (index, autoPlay = true) => {
       if (index < 0 || index >= playlist.length) {
         console.warn('⚠️ Invalid track index:', index);
         return false;
@@ -144,93 +177,108 @@ export const useAudioPlayer = () => {
       }
 
       console.log(
-        `🎯 Playing track ${index + 1}/${playlist.length}:`,
+        `🎯 Loading track ${index + 1}/${playlist.length}:`,
         track.name
       );
 
       const loaded = await loadTrack(track, index);
-      if (loaded) {
+
+      if (loaded && autoPlay) {
         return await play();
       }
 
-      return false;
+      return loaded;
     },
     [playlist, loadTrack, play]
   );
 
-  const playNext = useCallback(async () => {
-    console.log('⏭️ Playing next track...');
-    console.log('Current state:', {
-      currentIndex,
-      playlistLength: playlist.length,
+  const playNext = useCallback(
+    async (force = false) => {
+      // Anti-loop protection
+      if (!force && !canPlayNext) {
+        console.log('🛑 Auto-play next blocked to prevent loop');
+        setError('❌ Multiple playback failures. Please try manually.');
+        return false;
+      }
+
+      if (playlist.length <= 1) {
+        console.log('🏁 Single track playlist');
+        setIsPlaying(false);
+        return false;
+      }
+
+      const nextIndex = getNextIndex();
+
+      // Check repeat mode
+      if (repeat === 'all' || nextIndex !== currentIndex) {
+        console.log('⏭️ Playing next:', nextIndex + 1);
+        setCanPlayNext(false); // Prevent rapid auto-skip
+
+        const success = await playTrack(nextIndex);
+
+        if (!success) {
+          console.log('❌ Next track failed, stopping auto-play');
+          setCanPlayNext(false);
+          return false;
+        }
+
+        return true;
+      } else {
+        console.log('🏁 End of playlist');
+        setIsPlaying(false);
+        return false;
+      }
+    },
+    [
+      playlist.length,
+      getNextIndex,
       repeat,
-    });
-
-    const nextIndex = getNextIndex();
-
-    if (repeat === 'all' && nextIndex >= playlist.length) {
-      // Loop to beginning
-      console.log('🔁 Looping to beginning');
-      return await playTrack(0);
-    } else if (nextIndex < playlist.length) {
-      console.log(`➡️ Moving to track ${nextIndex + 1}`);
-      return await playTrack(nextIndex);
-    } else {
-      console.log('🏁 No more tracks');
-      setIsPlaying(false);
-      return false;
-    }
-  }, [currentIndex, playlist.length, repeat, getNextIndex, playTrack]);
+      currentIndex,
+      canPlayNext,
+      playTrack,
+    ]
+  );
 
   const playPrevious = useCallback(async () => {
-    console.log('⏮️ Playing previous track...');
+    if (playlist.length <= 1) {
+      console.log('🏁 Single track playlist');
+      return false;
+    }
 
     const prevIndex = getPreviousIndex();
 
-    if (repeat === 'all' && prevIndex < 0) {
-      // Loop to end
-      console.log('🔁 Looping to end');
-      return await playTrack(playlist.length - 1);
-    } else if (prevIndex >= 0) {
-      console.log(`⬅️ Moving to track ${prevIndex + 1}`);
+    if (repeat === 'all' || prevIndex !== currentIndex) {
+      console.log('⏮️ Playing previous:', prevIndex + 1);
       return await playTrack(prevIndex);
     } else {
-      console.log('🏁 No previous tracks');
+      console.log('🏁 Start of playlist');
       return false;
     }
-  }, [currentIndex, playlist.length, repeat, getPreviousIndex, playTrack]);
+  }, [playlist.length, getPreviousIndex, repeat, currentIndex, playTrack]);
 
-  // Handle when track ends - با تمام dependencies
+  // Handle when track ends - SIMPLE
   const handleTrackEnd = useCallback(() => {
     console.log('🔚 Track ended:', currentTrack?.name);
-    console.log('End state:', {
-      repeat,
-      currentIndex,
-      playlistLength: playlist.length,
-    });
+    console.log('🔄 Repeat mode:', repeat);
 
     if (repeat === 'one') {
       console.log('🔂 Repeating current track');
       const audio = audioRef.current;
       audio.currentTime = 0;
-      audio.play().catch(console.error);
+      audio.play().catch(() => {
+        console.error('❌ Repeat failed');
+        setError('❌ Repeat failed');
+        setIsPlaying(false);
+      });
       return;
     }
 
-    if (repeat === 'all') {
-      console.log('🔁 Repeat all mode - playing next');
-      playNext();
-      return;
-    }
-
-    // Normal mode
-    if (currentIndex < playlist.length - 1) {
-      console.log(
-        `✨ Auto-playing next: ${currentIndex + 1}/${playlist.length}`
-      );
+    // Auto-play next (with protection)
+    if (repeat === 'all' || currentIndex < playlist.length - 1) {
+      console.log('✨ Auto-playing next track...');
       playNext();
     } else {
-      console.log('🏁 End of playlist reached');
+      console.log('🏁 Playlist ended');
       setIsPlaying(false);
     }
   }, [repeat, currentIndex, playlist.length, currentTrack, playNext]);
@@ -243,36 +291,44 @@ export const useAudioPlayer = () => {
         await play();
       } else if (playlist.length > 0) {
         await playTrack(0);
+      } else {
+        setError('❌ No tracks available');
       }
     }
-  }, [isPlaying, currentTrack, playlist, play, pause, playTrack]);
+  }, [isPlaying, currentTrack, playlist.length, play, pause, playTrack]);
 
   const seek = useCallback(
     (time) => {
-      if (isFinite(time) && time >= 0) {
-        audioRef.current.currentTime = Math.min(time, duration || 0);
-        setCurrentTime(time);
+      if (isFinite(time) && time >= 0 && duration > 0) {
+        try {
+          audioRef.current.currentTime = Math.min(time, duration);
+          setCurrentTime(time);
+        } catch (error) {
+          console.warn('⚠️ Seek failed:', error);
+        }
       }
     },
     [duration]
   );
 
-  const updatePlaylist = useCallback(
-    (tracks) => {
-      console.log('📋 Updating playlist:', tracks.length, 'tracks');
-      setPlaylistState(tracks);
-      setCurrentIndex(0);
-      setCurrentTrack(null);
-      setIsPlaying(false);
-      setError(null);
+  const updatePlaylist = useCallback((tracks) => {
+    console.log('📋 Updating playlist:', tracks.length, 'tracks');
 
-      // Auto-load first track if available
-      if (tracks.length > 0) {
-        loadTrack(tracks[0], 0);
-      }
-    },
-    [loadTrack]
-  );
+    // Reset everything
+    const audio = audioRef.current;
+    audio.pause();
+    audio.src = '';
+
+    setPlaylistState(tracks);
+    setCurrentIndex(0);
+    setCurrentTrack(null);
+    setIsPlaying(false);
+    setLoading(false);
+    setError(null);
+    setCanPlayNext(true);
+    setCurrentTime(0);
+    setDuration(0);
+  }, []);
 
   const toggleShuffle = useCallback(() => {
     setShuffle((prev) => {
@@ -298,52 +354,53 @@ export const useAudioPlayer = () => {
     return `${mins}:${secs.toString().padStart(2, '0')}`;
   }, []);
 
-  // Initialize audio element event listeners
+  // Manual retry function
+  const retryCurrentTrack = useCallback(async () => {
+    if (currentTrack) {
+      console.log('🔄 Retrying current track:', currentTrack.name);
+      setCanPlayNext(true); // Reset protection
+      await playTrack(currentIndex);
+    }
+  }, [currentTrack, currentIndex, playTrack]);
+
+  // Initialize audio element listeners - SIMPLIFIED
   useEffect(() => {
     const audio = audioRef.current;
 
-    const handleTimeUpdate = () => {
-      const currentTime = audio.currentTime;
-      setCurrentTime(currentTime);
-
-      // Debug timing
-      if (audio.duration && Math.abs(audio.duration - currentTime) < 0.1) {
-        console.log('🕐 Almost ended:', {
-          currentTime: currentTime.toFixed(2),
-          duration: audio.duration.toFixed(2),
-          difference: (audio.duration - currentTime).toFixed(2),
-        });
+    const handleTimeUpdate = () => setCurrentTime(audio.currentTime);
+    const handleDurationChange = () => {
+      if (isFinite(audio.duration)) {
+        setDuration(audio.duration);
       }
     };
 
-    const handleDurationChange = () => {
-      const newDuration = audio.duration || 0;
-      console.log('⏱️ Duration loaded:', formatTime(newDuration));
-      setDuration(newDuration);
+    const handleWaiting = () => {
+      console.log('⏳ Buffering...');
     };
 
-    const handleLoadStart = () => {
-      console.log('📀 Load started');
-      setLoading(true);
-    };
-
-    const handleCanPlay = () => {
-      console.log('✅ Can play');
+    const handlePlaying = () => {
+      console.log('▶️ Playback started');
       setLoading(false);
+    };
+
+    const handlePause = () => {
+      console.log('⏸️ Playback paused');
     };
 
     const handleError = (e) => {
-      console.error('❌ Audio error:', e);
-      setError('Audio playback error');
-      setLoading(false);
+      console.error('❌ Audio error:', e.type, e.message);
       setIsPlaying(false);
+      setLoading(false);
+      setError('❌ Playback error occurred');
+      setCanPlayNext(false); // Prevent auto-skip loops
     };
 
-    // Add event listeners
+    // Add listeners
     audio.addEventListener('timeupdate', handleTimeUpdate);
     audio.addEventListener('durationchange', handleDurationChange);
-    audio.addEventListener('loadstart', handleLoadStart);
-    audio.addEventListener('canplay', handleCanPlay);
+    audio.addEventListener('waiting', handleWaiting);
+    audio.addEventListener('playing', handlePlaying);
+    audio.addEventListener('pause', handlePause);
     audio.addEventListener('ended', handleTrackEnd);
     audio.addEventListener('error', handleError);
 
@@ -351,16 +408,21 @@ export const useAudioPlayer = () => {
       // Cleanup
       audio.removeEventListener('timeupdate', handleTimeUpdate);
       audio.removeEventListener('durationchange', handleDurationChange);
-      audio.removeEventListener('loadstart', handleLoadStart);
-      audio.removeEventListener('canplay', handleCanPlay);
+      audio.removeEventListener('waiting', handleWaiting);
+      audio.removeEventListener('playing', handlePlaying);
+      audio.removeEventListener('pause', handlePause);
       audio.removeEventListener('ended', handleTrackEnd);
       audio.removeEventListener('error', handleError);
     };
-  }, [handleTrackEnd, formatTime]); // ✅ handleTrackEnd dependency اضافه شد
+  }, [handleTrackEnd]);
 
-  // Update volume when changed
+  // Volume control
   useEffect(() => {
-    audioRef.current.volume = Math.max(0, Math.min(1, volume));
+    try {
+      audioRef.current.volume = Math.max(0, Math.min(1, volume));
+    } catch (error) {
+      console.warn('⚠️ Volume change failed:', error);
+    }
   }, [volume]);
 
   return {
@@ -376,17 +438,19 @@ export const useAudioPlayer = () => {
     error,
     shuffle,
     repeat,
+    canPlayNext,
 
     // Actions
     togglePlayPause,
     playTrack,
-    playNext,
+    playNext: () => playNext(true), // Force next
     playPrevious,
     seek,
     setVolume,
     setPlaylist: updatePlaylist,
     toggleShuffle,
     toggleRepeat,
+    retryCurrentTrack,
 
     // Utils
     formatTime,

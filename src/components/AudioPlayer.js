@@ -1,4 +1,4 @@
-// src/components/AudioPlayer.js - Simplified (hook handles auto-play)
+// src/components/AudioPlayer.js - Simplified with retry
 import React from 'react';
 import './AudioPlayer.css';
 
@@ -13,6 +13,7 @@ const AudioPlayer = ({
   error,
   shuffle,
   repeat,
+  canPlayNext,
   togglePlayPause,
   playNext,
   playPrevious,
@@ -20,12 +21,13 @@ const AudioPlayer = ({
   setVolume,
   toggleShuffle,
   toggleRepeat,
+  retryCurrentTrack,
   formatTime,
   onRefresh,
   totalTracks,
 }) => {
   const handleProgressClick = (e) => {
-    if (!currentTrack || !duration) return;
+    if (!currentTrack || !duration || loading) return;
 
     const progressBar = e.currentTarget;
     const rect = progressBar.getBoundingClientRect();
@@ -59,21 +61,10 @@ const AudioPlayer = ({
     }
   };
 
-  const getRepeatClass = () => {
-    return repeat !== 'none' ? 'active' : '';
-  };
-
   const getVolumeIcon = () => {
     if (volume === 0) return '🔇';
     if (volume < 0.5) return '🔉';
     return '🔊';
-  };
-
-  const getAutoPlayStatus = () => {
-    if (totalTracks <= 1) return 'Single track';
-    if (repeat === 'one') return 'Repeat current';
-    if (repeat === 'all') return 'Loop playlist';
-    return `${totalTracks - currentIndex - 1} tracks remaining`;
   };
 
   return (
@@ -94,19 +85,23 @@ const AudioPlayer = ({
                   </span>
                 )}
               </p>
-              <p className="track-source">
-                📎{' '}
-                {currentTrack.source === 'shared_url'
-                  ? 'Shared Link'
-                  : 'File Attachment'}
-                {currentTrack.canPlay ? ' • ✅ Playable' : ' • ❌ Not playable'}
-              </p>
             </div>
             <div className="track-actions">
+              {error && (
+                <button
+                  onClick={retryCurrentTrack}
+                  className="btn-retry"
+                  title="Retry current track"
+                  disabled={loading}
+                >
+                  🔄 Retry
+                </button>
+              )}
               <button
                 onClick={onRefresh}
                 className="btn-refresh"
                 title="Refresh playlist"
+                disabled={loading}
               >
                 🔄
               </button>
@@ -117,7 +112,11 @@ const AudioPlayer = ({
             <p>🎵 No track selected</p>
             <p>Select a track from the playlist to start</p>
             {totalTracks === 0 && (
-              <button onClick={onRefresh} className="btn-refresh">
+              <button
+                onClick={onRefresh}
+                className="btn-refresh"
+                disabled={loading}
+              >
                 🔄 Load Audio Files
               </button>
             )}
@@ -130,7 +129,16 @@ const AudioPlayer = ({
         <div className="autoplay-status">
           <div className="autoplay-indicators">
             <span className="indicator">
-              🎵 <strong>Auto-play:</strong> {getAutoPlayStatus()}
+              🎵 <strong>Auto-play:</strong>{' '}
+              {!canPlayNext
+                ? 'Disabled (errors)'
+                : totalTracks <= 1
+                ? 'Single track'
+                : repeat === 'one'
+                ? 'Repeat current'
+                : repeat === 'all'
+                ? 'Loop playlist'
+                : `${totalTracks - currentIndex - 1} tracks remaining`}
             </span>
             {shuffle && (
               <span className="indicator">
@@ -146,9 +154,11 @@ const AudioPlayer = ({
                 : 'OFF'}
             </span>
           </div>
-          <div className="playback-info">
-            ℹ️ Hook handles auto-play when songs end
-          </div>
+          {!canPlayNext && (
+            <div className="autoplay-disabled-warning">
+              ⚠️ Auto-play disabled due to errors. Use manual controls or retry.
+            </div>
+          )}
         </div>
       )}
 
@@ -160,7 +170,11 @@ const AudioPlayer = ({
         <div
           className="progress-bar"
           onClick={handleProgressClick}
-          style={{ cursor: currentTrack && duration ? 'pointer' : 'default' }}
+          style={{
+            cursor:
+              currentTrack && duration && !loading ? 'pointer' : 'default',
+            opacity: loading ? 0.5 : 1,
+          }}
         >
           <div
             className="progress-fill"
@@ -170,7 +184,7 @@ const AudioPlayer = ({
             className="progress-handle"
             style={{
               left: `${progressPercentage}%`,
-              opacity: currentTrack && duration ? 1 : 0,
+              opacity: currentTrack && duration && !loading ? 1 : 0,
             }}
           />
         </div>
@@ -182,6 +196,7 @@ const AudioPlayer = ({
         <button
           className={`btn-control btn-shuffle ${shuffle ? 'active' : ''}`}
           onClick={toggleShuffle}
+          disabled={loading}
           title={`Shuffle: ${shuffle ? 'ON' : 'OFF'}`}
         >
           🔀
@@ -190,7 +205,7 @@ const AudioPlayer = ({
         <button
           className="btn-control btn-previous"
           onClick={playPrevious}
-          disabled={loading || !currentTrack}
+          disabled={loading || !currentTrack || totalTracks <= 1}
           title="Previous track"
         >
           ⏮
@@ -200,7 +215,7 @@ const AudioPlayer = ({
           className="btn-control btn-play-pause main-play-button"
           onClick={togglePlayPause}
           disabled={loading || !currentTrack}
-          title={isPlaying ? 'Pause' : 'Play'}
+          title={loading ? 'Loading...' : isPlaying ? 'Pause' : 'Play'}
         >
           {loading ? '⏳' : isPlaying ? '⏸' : '▶'}
         </button>
@@ -208,15 +223,18 @@ const AudioPlayer = ({
         <button
           className="btn-control btn-next"
           onClick={playNext}
-          disabled={loading || !currentTrack}
-          title="Next track"
+          disabled={loading || !currentTrack || totalTracks <= 1}
+          title="Next track (manual)"
         >
           ⏭
         </button>
 
         <button
-          className={`btn-control btn-repeat ${getRepeatClass()}`}
+          className={`btn-control btn-repeat ${
+            repeat !== 'none' ? 'active' : ''
+          }`}
           onClick={toggleRepeat}
+          disabled={loading}
           title={`Repeat: ${
             repeat === 'one' ? 'Current' : repeat === 'all' ? 'All' : 'Off'
           }`}
@@ -254,7 +272,20 @@ const AudioPlayer = ({
         </div>
       )}
 
-      {error && <div className="status-message error">❌ {error}</div>}
+      {error && (
+        <div className="status-message error">
+          {error}
+          {currentTrack && (
+            <button
+              onClick={retryCurrentTrack}
+              className="error-retry-btn"
+              disabled={loading}
+            >
+              🔄 Try Again
+            </button>
+          )}
+        </div>
+      )}
 
       {!currentTrack && totalTracks > 0 && !loading && (
         <div className="status-message info">
