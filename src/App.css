@@ -122,3 +122,115 @@ body {
     gap: 0.5rem;
   }
 }
+
+.player-status {
+  background: white;
+  border-radius: 12px;
+  box-shadow: 0 2px 10px rgba(0, 0, 0, 0.1);
+  padding: 20px;
+  margin-bottom: 20px;
+}
+
+.status-summary {
+  display: flex;
+  justify-content: center;
+  gap: 20px;
+  margin-bottom: 15px;
+  flex-wrap: wrap;
+}
+
+.status-summary span {
+  background: #f8f9fa;
+  padding: 8px 16px;
+  border-radius: 20px;
+  font-size: 0.9rem;
+  color: #495057;
+  border: 1px solid #e9ecef;
+}
+
+.total-files {
+  background: linear-gradient(135deg, #e3f2fd, #bbdefb) !important;
+  border-color: #2196f3 !important;
+  color: #1976d2 !important;
+}
+
+.playable-files {
+  background: linear-gradient(135deg, #e8f5e8, #c8e6c8) !important;
+  border-color: #4caf50 !important;
+  color: #388e3c !important;
+}
+
+.teams-files {
+  background: linear-gradient(135deg, #fff3e0, #ffe0b2) !important;
+  border-color: #ff9800 !important;
+  color: #f57c00 !important;
+}
+
+.help-banner {
+  background: linear-gradient(135deg, #fff3cd, #ffeaa7);
+  border: 1px solid #ffc107;
+  border-radius: 8px;
+  padding: 12px 16px;
+  text-align: center;
+  color: #856404;
+  font-size: 0.9rem;
+  line-height: 1.4;
+}
+
+.help-banner strong {
+  color: #533f03;
+}
+
+.nav-breadcrumb {
+  display: flex;
+  align-items: center;
+  gap: 15px;
+  color: white;
+}
+
+.back-btn {
+  background: rgba(255, 255, 255, 0.2);
+  color: white;
+  border: 1px solid rgba(255, 255, 255, 0.3);
+  padding: 8px 16px;
+  border-radius: 6px;
+  cursor: pointer;
+  font-size: 0.9rem;
+  transition: all 0.2s ease;
+}
+
+.back-btn:hover {
+  background: rgba(255, 255, 255, 0.3);
+  transform: translateX(-2px);
+}
+
+.current-chat {
+  opacity: 0.9;
+  font-size: 0.95rem;
+  font-weight: 500;
+}
+
+/* Responsive adjustments */
+@media (max-width: 768px) {
+  .nav-breadcrumb {
+    flex-direction: column;
+    gap: 8px;
+    text-align: center;
+  }
+
+  .status-summary {
+    flex-direction: column;
+    align-items: center;
+    gap: 10px;
+  }
+
+  .status-summary span {
+    width: fit-content;
+    text-align: center;
+  }
+
+  .help-banner {
+    font-size: 0.85rem;
+    padding: 10px 12px;
+  }
+}

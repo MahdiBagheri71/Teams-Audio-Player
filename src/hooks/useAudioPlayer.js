@@ -8,7 +8,7 @@ export const useAudioPlayer = () => {
   const [duration, setDuration] = useState(0);
   const [volume, setVolume] = useState(1);
   const [currentTrack, setCurrentTrack] = useState(null);
-  const [playlist, setPlaylistState] = useState([]); // ✅ نام تغییر کرد
+  const [playlist, setPlaylistState] = useState([]);
   const [currentIndex, setCurrentIndex] = useState(0);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
@@ -175,10 +175,10 @@ export const useAudioPlayer = () => {
     setCurrentTime(time);
   }, []);
 
-  // ✅ اصلاح شده - نام function تغییر کرد
+
   const updatePlaylist = useCallback(
     (tracks) => {
-      setPlaylistState(tracks); // ✅ درست شد
+      setPlaylistState(tracks); 
       setCurrentIndex(0);
       if (tracks.length > 0 && !currentTrack) {
         setCurrentTrack(tracks[0]);
@@ -235,7 +235,7 @@ export const useAudioPlayer = () => {
     playPrevious,
     seek,
     setVolume,
-    setPlaylist: updatePlaylist, // ✅ exported با نام درست
+    setPlaylist: updatePlaylist, 
     toggleShuffle,
     toggleRepeat,
 

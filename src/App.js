@@ -1,4 +1,4 @@
-// src/App.js
+// src/App.js - Fixed audioPlayer.stop error
 import React, { useState, useEffect } from 'react';
 import { useAuth } from './hooks/useAuth';
 import { useAudioPlayer } from './hooks/useAudioPlayer';
@@ -30,26 +30,34 @@ function App() {
   const [audioFiles, setAudioFiles] = useState([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
-  const [view, setView] = useState('chat-selector'); // 'chat-selector' or 'player'
+  const [view, setView] = useState('chat-selector');
 
-  // Initialize audio service
+  // Initialize audio service ONCE when graphClient is available
   useEffect(() => {
-    if (graphClient) {
+    if (graphClient && !audioService) {
+      console.log('🚀 Initializing AudioService...');
       const service = new AudioService(graphClient);
       setAudioService(service);
-      loadChats(service);
     }
-  }, [graphClient]);
+  }, [graphClient, audioService]);
 
-  const loadChats = async (service = audioService) => {
-    if (!service) return;
+  // Load chats ONCE when audioService is ready
+  useEffect(() => {
+    if (audioService && chats.length === 0 && !loading) {
+      console.log('📞 Loading chats for the first time...');
+      loadChats();
+    }
+  }, [audioService]); // Only depend on audioService
+
+  const loadChats = async () => {
+    if (!audioService || loading) return;
 
     try {
       setLoading(true);
       setError(null);
 
       console.log('🚀 Loading chats...');
-      const userChats = await service.getUserChats();
+      const userChats = await audioService.getUserChats();
 
       console.log(`✅ Loaded ${userChats.length} chats`);
       setChats(userChats);
@@ -85,13 +93,32 @@ function App() {
       console.log(`✅ Found ${chatAudioFiles.length} audio files in chat`);
 
       setAudioFiles(chatAudioFiles);
-      audioPlayer.setPlaylist(chatAudioFiles.filter((f) => f.canPlay)); 
+
+      // Only set playable files in player
+      const playableFiles = chatAudioFiles.filter((f) => f.canPlay);
+      audioPlayer.setPlaylist(playableFiles);
+
       setView('player');
 
       if (chatAudioFiles.length === 0) {
         setError(
-          `No audio files found in "${selectedChatObj.title}". Try a different chat or send some audio files first!`
+          `No audio files found in "${selectedChatObj.title}". Try a different chat!`
         );
+      } else {
+        const playableCount = playableFiles.length;
+        const totalCount = chatAudioFiles.length;
+
+        if (playableCount === 0 && totalCount > 0) {
+          setError(
+            `Found ${totalCount} audio files, but they are Teams attachments and cannot be played directly. ` +
+              `Click on files to open in Teams and download them.`
+          );
+        } else if (playableCount > 0) {
+          setError(null); // Clear any previous errors
+          console.log(
+            `🎵 Ready to play ${playableCount} out of ${totalCount} files`
+          );
+        }
       }
     } catch (err) {
       console.error('💥 Failed to load chat audio files:', err);
@@ -102,29 +129,50 @@ function App() {
   };
 
   const goBackToChats = () => {
+    // Pause audio if it's playing
+    if (audioPlayer.isPlaying) {
+      audioPlayer.pause();
+    }
+
+    // Reset state
     setView('chat-selector');
     setSelectedChat(null);
     setAudioFiles([]);
     setError(null);
+
+    // Clear playlist
     audioPlayer.setPlaylist([]);
+
+    console.log('👈 Returned to chat selector');
   };
 
   const handleRefreshChats = () => {
+    setChats([]); // Clear chats to trigger reload
+    setError(null);
     loadChats();
   };
 
   const handleRefreshCurrentChat = () => {
-    if (selectedChat) {
+    if (selectedChat && !loading) {
       handleChatSelect(selectedChat);
     }
   };
 
-  // Test API access
+  // Test API access with enhanced permissions
   const testAPI = async () => {
     if (audioService) {
-      console.log('🧪 Manual API test...');
-      const result = await audioService.testBasicAccess();
-      alert(result ? '✅ API access works!' : '❌ API access failed!');
+      console.log('🧪 Testing enhanced API access...');
+
+      // Use the enhanced test method if available
+      const testMethod =
+        audioService.testEnhancedAccess || audioService.testBasicAccess;
+      const result = await testMethod.call(audioService);
+
+      const message = result
+        ? '✅ API access works! Check console for details.'
+        : '❌ API access failed! Check console for errors.';
+
+      alert(message);
     }
   };
 
@@ -142,7 +190,6 @@ function App() {
         <div className="header-content">
           <h1>🎵 Teams Audio Player</h1>
 
-          {/* Navigation */}
           {view === 'player' && selectedChat && (
             <div className="nav-breadcrumb">
               <button onClick={goBackToChats} className="back-btn">
@@ -155,7 +202,7 @@ function App() {
           <div className="user-info">
             <span>Welcome, {user?.name || 'User'}</span>
 
-            <button
+            {/* <button
               onClick={testAPI}
               className="btn-debug"
               style={{
@@ -165,7 +212,7 @@ function App() {
               }}
             >
               🧪 Test API
-            </button>
+            </button> */}
 
             <button onClick={logout} className="btn-logout">
               Logout
@@ -192,7 +239,7 @@ function App() {
         {!loading && view === 'chat-selector' && (
           <ChatSelector
             chats={chats}
-            loading={loading}
+            loading={false}
             onChatSelect={handleChatSelect}
             onRefresh={handleRefreshChats}
             selectedChatId={selectedChat?.id}
@@ -201,17 +248,44 @@ function App() {
 
         {!loading && view === 'player' && (
           <div className="player-container">
+            {/* Show file status */}
+            {audioFiles.length > 0 && (
+              <div className="player-status">
+                <div className="status-summary">
+                  <span className="total-files">
+                    📁 {audioFiles.length} files found
+                  </span>
+                  <span className="playable-files">
+                    🎵 {audioFiles.filter((f) => f.canPlay).length} ready to
+                    play
+                  </span>
+                  <span className="teams-files">
+                    📎 {audioFiles.filter((f) => !f.canPlay).length} Teams
+                    attachments
+                  </span>
+                </div>
+
+                {audioFiles.filter((f) => !f.canPlay).length > 0 && (
+                  <div className="help-banner">
+                    💡{' '}
+                    <strong>Teams attachments can't be played directly.</strong>{' '}
+                    Click them to open in Teams and download manually.
+                  </div>
+                )}
+              </div>
+            )}
+
             <AudioPlayer
               {...audioPlayer}
               onRefresh={handleRefreshCurrentChat}
-              totalTracks={audioFiles.length}
+              totalTracks={audioFiles.filter((f) => f.canPlay).length}
             />
 
             <Playlist
               files={audioFiles}
               currentIndex={audioPlayer.currentIndex}
               onTrackSelect={audioPlayer.playTrack}
-              loading={loading}
+              loading={false}
             />
           </div>
         )}
@@ -221,7 +295,9 @@ function App() {
         <p>
           {view === 'chat-selector'
             ? `Found ${chats.length} chats`
-            : `Found ${audioFiles.length} audio files in "${selectedChat?.title}"`}
+            : `${selectedChat?.title || 'Current chat'}: ${
+                audioFiles.length
+              } audio files`}
         </p>
       </footer>
     </div>
