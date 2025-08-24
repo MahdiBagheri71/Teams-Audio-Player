@@ -1,0 +1,83 @@
+version: '3.8'
+
+services:
+  teams-audio-player:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      target: production
+    container_name: teams-audio-player
+    ports:
+      - '80:80'
+      - '443:443'
+    environment:
+      - REACT_APP_CLIENT_ID=${REACT_APP_CLIENT_ID}
+      - REACT_APP_AUTHORITY=${REACT_APP_AUTHORITY}
+      - REACT_APP_REDIRECT_URI=${REACT_APP_REDIRECT_URI}
+      - REACT_APP_GRAPH_SCOPES=${REACT_APP_GRAPH_SCOPES}
+    volumes:
+      - ./nginx.conf:/etc/nginx/nginx.conf:ro
+      - ssl-certs:/etc/nginx/ssl:ro
+    restart: unless-stopped
+    healthcheck:
+      test: ['CMD', 'curl', '-f', 'http://localhost/']
+      interval: 30s
+      timeout: 3s
+      retries: 3
+      start_period: 5s
+    networks:
+      - app-network
+    labels:
+      - 'com.centurylinklabs.watchtower.enable=true'
+      - 'traefik.enable=true'
+      - 'traefik.http.routers.teams-audio-player.rule=Host(`yourdomain.com`)'
+      - 'traefik.http.routers.teams-audio-player.entrypoints=websecure'
+      - 'traefik.http.routers.teams-audio-player.tls.certresolver=letsencrypt'
+
+  # Optional: Redis for session management (if needed in future)
+  redis:
+    image: redis:7-alpine
+    container_name: teams-audio-redis
+    volumes:
+      - redis-data:/data
+    networks:
+      - app-network
+    restart: unless-stopped
+    profiles:
+      - full-stack
+
+  # Optional: Traefik reverse proxy for SSL
+  traefik:
+    image: traefik:v2.10
+    container_name: teams-audio-traefik
+    command:
+      - '--api.insecure=true'
+      - '--providers.docker=true'
+      - '--providers.docker.exposedbydefault=false'
+      - '--entrypoints.web.address=:80'
+      - '--entrypoints.websecure.address=:443'
+      - '--certificatesresolvers.letsencrypt.acme.httpchallenge=true'
+      - '--certificatesresolvers.letsencrypt.acme.httpchallenge.entrypoint=web'
+      - '--certificatesresolvers.letsencrypt.acme.email=your-email@example.com'
+      - '--certificatesresolvers.letsencrypt.acme.storage=/letsencrypt/acme.json'
+    ports:
+      - '80:80'
+      - '443:443'
+      - '8080:8080'
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+      - letsencrypt:/letsencrypt
+    networks:
+      - app-network
+    restart: unless-stopped
+    profiles:
+      - with-ssl
+
+networks:
+  app-network:
+    driver: bridge
+
+volumes:
+  ssl-certs:
+  redis-data:
+  letsencrypt:
